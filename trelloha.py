@@ -68,7 +68,7 @@ class Trelloha(object):
                     if review['status'] == "MERGED":
                         LOG.info(
                             "Setting %s to complete, review %s is merged"
-                            % (item['id'], review_id))
+                            % (item['id'], review['id']))
                         self.checkitem_update_state(checklist['idCard'],
                                                     checklist['id'],
                                                     item['id'],
