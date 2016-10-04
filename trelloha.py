@@ -17,7 +17,7 @@ class NoAuth(RuntimeError):
         super(NoAuth, self).__init__(
             """No authentication token found.\n
 Go to:\n%s\n\nand add the following to your ~/.netrc file:\n
-machine trello.com login <BOARD_ID> password <TOKEN>""" % 
+machine trello.com login <BOARD_ID> password <TOKEN>""" %
             trello.get_token_url("Trelloha",
                                  expires='30days',
                                  write_access=True))
