@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 class NoAuth(RuntimeError):
     def __init__(self, trello):
         super(NoAuth, self).__init__(
-            """No authentication token found.\n
+            """No authentication token found or token expired.\n
 Go to:\n%s\n\nand add the following to your ~/.netrc file:\n
 machine trello.com login <BOARD_ID> password <TOKEN>""" %
             trello.get_token_url("Trelloha",
@@ -56,23 +56,29 @@ class Trelloha(object):
         return json.loads(r.text[5:])
 
     def update_trello_card_checklist_with_review(self):
-        for checklist in self.trello.boards.get_checklist(self.board_id):
-            for item in checklist['checkItems']:
-                if (item['state'] == "incomplete"
-                   and self.GERRIT_URL in item['name']):
-                    matched = re.search("%s/(#/c/)?(\d+)" % self.GERRIT_URL,
-                                        item['name'])
-                    if not matched:
-                        continue
-                    review = self.get_review(int(matched.group(2)))
-                    if review['status'] == "MERGED":
-                        LOG.info(
-                            "Setting %s to complete, review %s is merged"
-                            % (item['id'], review['id']))
-                        self.checkitem_update_state(checklist['idCard'],
-                                                    checklist['id'],
-                                                    item['id'],
-                                                    "complete")
+        try:
+            for checklist in self.trello.boards.get_checklist(self.board_id):
+                for item in checklist['checkItems']:
+                    if (item['state'] == "incomplete"
+                       and self.GERRIT_URL in item['name']):
+                        matched = re.search(
+                            "%s/(#/c/)?(\d+)" % self.GERRIT_URL,
+                            item['name'])
+                        if not matched:
+                            continue
+                        review = self.get_review(int(matched.group(2)))
+                        if review['status'] == "MERGED":
+                            LOG.info(
+                                "Setting %s to complete, review %s is merged"
+                                % (item['id'], review['id']))
+                            self.checkitem_update_state(checklist['idCard'],
+                                                        checklist['id'],
+                                                        item['id'],
+                                                        "complete")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                raise NoAuth(self.trello)
+            raise
 
 
 def main():
