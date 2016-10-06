@@ -30,6 +30,8 @@ class Trelloha(object):
                    "RDO": "https://review.rdoproject.org"}
     BUGZILLA_URLS = {"Red hat": "https://bugzilla.redhat.com"}
 
+    GITHUB_URL = "https://github.com"
+
     def __init__(self):
         self.trello = trello.TrelloApi(TRELLO_APP_KEY)
         self.board_id, token = self.get_board_token()
@@ -61,6 +63,25 @@ class Trelloha(object):
         r = requests.get("%s/show_bug.cgi?ctype=xml&id=%s" % (bugzilla_url,
                                                               bug_id))
         return defusedxml.ElementTree.fromstring(r.content)
+
+    def is_a_github_pull_request_merged(self, checklist_item):
+        if self.GITHUB_URL not in checklist_item['name']:
+            return False
+        matched = re.search("%s/(.*)/(pull|issue)/(\d+)" % self.GITHUB_URL,
+                            checklist_item['name'])
+        if not matched:
+            return False
+        repo = matched.group(1)
+        kind = matched.group(2)
+        pr_id = int(matched.group(3))
+        r = requests.get("https://api.github.com/repos/%s/%ss/%s" %
+                         (repo, kind, pr_id))
+        info = json.loads(r.text)
+        if info['state'] in ['closed', 'merged']:
+            LOG.info("Github %s %s %s is %s" %
+                     (repo, kind, pr_id, info['state']))
+            return True
+        return False
 
     def is_a_gerrit_review_merged(self, checklist_item):
         for gerrit_name, gerrit_url in self.GERRIT_URLS.items():
@@ -107,6 +128,7 @@ class Trelloha(object):
                 for item in checklist['checkItems']:
                     completed = (item['state'] == "incomplete" and
                                  (self.is_a_gerrit_review_merged(item) or
+                                  self.is_a_github_pull_request_merged(item) or
                                   self.is_a_bugzilla_modified(item)))
                     if completed:
                         LOG.info("Setting %s to complete" % item['id'])
