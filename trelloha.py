@@ -20,7 +20,7 @@ class NoAuth(RuntimeError):
 Go to:\n%s\n\nand add the following to your ~/.netrc file:\n
 machine trello.com login <BOARD_ID> password <TOKEN>""" %
             trello.get_token_url("Trelloha",
-                                 expires='30days',
+                                 expires='never',
                                  write_access=True))
 
 
