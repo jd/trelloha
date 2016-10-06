@@ -27,7 +27,8 @@ machine trello.com login <BOARD_ID> password <TOKEN>""" %
 class Trelloha(object):
 
     GERRIT_URLS = {"OpenStack": "https://review.openstack.org",
-                   "RDO": "https://review.rdoproject.org"}
+                   "RDO": "https://review.rdoproject.org",
+                   "RHOS": "https:///code.engineering.redhat.com/gerrit"}
     BUGZILLA_URLS = {"Red Hat": "https://bugzilla.redhat.com"}
 
     GITHUB_URL = "https://github.com"
