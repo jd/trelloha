@@ -4,6 +4,7 @@ import logging
 import netrc
 import re
 
+import defusedxml.ElementTree
 import requests
 import trello
 
@@ -26,6 +27,7 @@ machine trello.com login <BOARD_ID> password <TOKEN>""" %
 class Trelloha(object):
 
     GERRIT_URL = "https://review.openstack.org"
+    BUGZILLA_URL = "https://bugzilla.redhat.com"
 
     def __init__(self):
         self.trello = trello.TrelloApi(TRELLO_APP_KEY)
@@ -55,26 +57,56 @@ class Trelloha(object):
             "%s/changes/%d" % (self.GERRIT_URL, review_id))
         return json.loads(r.text[5:])
 
+    def get_bugzilla(self, bug_id):
+        r = requests.get(
+            "%s/show_bug.cgi?ctype=xml&id=%s" % (
+                self.BUGZILLA_URL, bug_id))
+        return defusedxml.ElementTree.fromstring(r.content)
+
+    def is_a_gerrit_review_merged(self, checklist_item):
+        if self.GERRIT_URL not in checklist_item['name']:
+            return False
+        matched = re.search("%s/(#/c/)?(\d+)" % self.GERRIT_URL,
+                            checklist_item['name'])
+        if not matched:
+            return False
+
+        review = self.get_review(int(matched.group(2)))
+        merged = review['status'] == "MERGED"
+        if merged:
+            LOG.info("Review %s is merged" % review['id'])
+        return merged
+
+    def is_a_bugzilla_modified(self, checklist_item):
+        if self.BUGZILLA_URL not in checklist_item['name']:
+            return False
+        matched = re.search("%s/show_bug.cgi\?id=(\d+)" % self.BUGZILLA_URL,
+                            checklist_item['name'])
+        if not matched:
+            return False
+        bug_id = int(matched.group(1))
+        bugzilla = self.get_bugzilla(bug_id)
+        bug_status = bugzilla.find('bug/bug_status').text
+
+        if bug_status in ["MODIFIED", "ON_QA", "VERIFIED", "RELEASING_PENDING",
+                          "CLOSED"]:
+            LOG.info("Buzgilla %s is %s" % (bug_id, bug_status))
+            return True
+        return False
+
     def update_trello_card_checklist_with_review(self):
         try:
             for checklist in self.trello.boards.get_checklist(self.board_id):
                 for item in checklist['checkItems']:
-                    if (item['state'] == "incomplete"
-                       and self.GERRIT_URL in item['name']):
-                        matched = re.search(
-                            "%s/(#/c/)?(\d+)" % self.GERRIT_URL,
-                            item['name'])
-                        if not matched:
-                            continue
-                        review = self.get_review(int(matched.group(2)))
-                        if review['status'] == "MERGED":
-                            LOG.info(
-                                "Setting %s to complete, review %s is merged"
-                                % (item['id'], review['id']))
-                            self.checkitem_update_state(checklist['idCard'],
-                                                        checklist['id'],
-                                                        item['id'],
-                                                        "complete")
+                    completed = (item['state'] == "incomplete" and
+                                 (self.is_a_gerrit_review_merged(item) or
+                                  self.is_a_bugzilla_modified(item)))
+                    if completed:
+                        LOG.info("Setting %s to complete" % item['id'])
+                        self.checkitem_update_state(checklist['idCard'],
+                                                    checklist['id'],
+                                                    item['id'],
+                                                    "complete")
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
                 raise NoAuth(self.trello)
