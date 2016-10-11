@@ -2,6 +2,7 @@
 import json
 import logging
 import netrc
+import os
 import re
 
 import defusedxml.ElementTree
@@ -26,9 +27,10 @@ machine trello.com login <BOARD_ID> password <TOKEN>""" %
 
 class Trelloha(object):
 
+    CERTS = {'https://code.engineering.redhat.com': 'rh-cacert.crt'}
     GERRIT_URLS = {"OpenStack": "https://review.openstack.org",
                    "RDO": "https://review.rdoproject.org",
-                   "RHOS": "https:///code.engineering.redhat.com/gerrit"}
+                   "RHOS": "https://code.engineering.redhat.com/gerrit"}
     BUGZILLA_URLS = {"Red Hat": "https://bugzilla.redhat.com"}
 
     GITHUB_URL = "https://github.com"
@@ -45,6 +47,12 @@ class Trelloha(object):
             raise NoAuth(self.trello)
         return n.hosts[site_name][0], n.hosts[site_name][2]
 
+    def get_verify(self, url):
+        for baseurl, cert in self.CERTS.items():
+            if url.startswith(baseurl):
+                return os.path.join(os.path.dirname(__file__), cert)
+        return True
+
     # TODO(jd) add that in trello.boards
     def checkitem_update_state(self, card_id, checklist_id, checkitem_id,
                                state):
@@ -57,12 +65,14 @@ class Trelloha(object):
         return json.loads(resp.content)
 
     def get_review(self, gerrit_url, review_id):
-        r = requests.get("%s/changes/%d" % (gerrit_url, review_id))
+        r = requests.get("%s/changes/%d" % (gerrit_url, review_id),
+                         verify=self.get_verify(gerrit_url))
         return json.loads(r.text[5:])
 
     def get_bugzilla(self, bugzilla_url, bug_id):
         r = requests.get("%s/show_bug.cgi?ctype=xml&id=%s" % (bugzilla_url,
-                                                              bug_id))
+                                                              bug_id),
+                         verify=self.get_verify(bugzilla_url))
         return defusedxml.ElementTree.fromstring(r.content)
 
     def is_a_github_pull_request_merged(self, checklist_item):
