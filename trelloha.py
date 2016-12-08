@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 import json
 import logging
 import netrc
@@ -124,7 +125,13 @@ class Trelloha(object):
             return False
         bug_id = int(matched.group(1))
         bugzilla = self.get_bugzilla(bugzilla_url, bug_id)
-        bug_status = bugzilla.find('bug/bug_status').text
+        bug = bugzilla.find('bug')
+        if "error" in bug.attrib:
+            LOG.debug("Not allowed to view BZ%s: %s" %
+                      (bug_id, bug.attrib["error"]))
+            bug_status = None
+        else:
+            bug_status = bugzilla.find('bug/bug_status').text
 
         if bug_status in ["MODIFIED", "ON_QA", "VERIFIED", "RELEASING_PENDING",
                           "CLOSED"]:
@@ -135,18 +142,26 @@ class Trelloha(object):
 
     def update_trello_card_checklist_with_review(self):
         try:
-            for checklist in self.trello.boards.get_checklist(self.board_id):
-                for item in checklist['checkItems']:
-                    completed = (item['state'] == "incomplete" and
-                                 (self.is_a_gerrit_review_merged(item) or
-                                  self.is_a_github_pull_request_merged(item) or
-                                  self.is_a_bugzilla_modified(item)))
-                    if completed:
-                        LOG.info("Setting %s to complete" % item['id'])
-                        self.checkitem_update_state(checklist['idCard'],
-                                                    checklist['id'],
-                                                    item['id'],
-                                                    "complete")
+            for card in self.trello.boards.get_card(self.board_id,
+                                                    filter="visible",
+                                                    checklists="all"):
+                for checklist in card["checklists"]:
+                    LOG.debug("Checking checklist '%s(%s)' of '%s(%s)'"
+                              % (checklist["name"], checklist["id"],
+                                 card["name"], card["id"]))
+                    for item in checklist['checkItems']:
+                        completed = (
+                            item['state'] == "incomplete" and
+                            (self.is_a_gerrit_review_merged(item) or
+                             self.is_a_github_pull_request_merged(item) or
+                             self.is_a_bugzilla_modified(item))
+                        )
+                        if completed:
+                            LOG.info("Setting %s to complete" % item['id'])
+                            self.checkitem_update_state(checklist['idCard'],
+                                                        checklist['id'],
+                                                        item['id'],
+                                                        "complete")
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
                 raise NoAuth(self.trello)
@@ -154,6 +169,13 @@ class Trelloha(object):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose', '-v', action='store_true')
+    args = parser.parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+        logging.getLogger("requests").setLevel(logging.WARN)
+
     t = Trelloha()
     t.update_trello_card_checklist_with_review()
 
