@@ -135,18 +135,23 @@ class Trelloha(object):
 
     def update_trello_card_checklist_with_review(self):
         try:
-            for checklist in self.trello.boards.get_checklist(self.board_id):
-                for item in checklist['checkItems']:
-                    completed = (item['state'] == "incomplete" and
-                                 (self.is_a_gerrit_review_merged(item) or
-                                  self.is_a_github_pull_request_merged(item) or
-                                  self.is_a_bugzilla_modified(item)))
-                    if completed:
-                        LOG.info("Setting %s to complete" % item['id'])
-                        self.checkitem_update_state(checklist['idCard'],
-                                                    checklist['id'],
-                                                    item['id'],
-                                                    "complete")
+            for card in self.trello.boards.get_card(self.board_id,
+                                                    filter="visible",
+                                                    checklists="all"):
+                for checklist in card["checklists"]:
+                    for item in checklist['checkItems']:
+                        completed = (
+                            item['state'] == "incomplete" and
+                            (self.is_a_gerrit_review_merged(item) or
+                             self.is_a_github_pull_request_merged(item) or
+                             self.is_a_bugzilla_modified(item))
+                        )
+                        if completed:
+                            LOG.info("Setting %s to complete" % item['id'])
+                            self.checkitem_update_state(checklist['idCard'],
+                                                        checklist['id'],
+                                                        item['id'],
+                                                        "complete")
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
                 raise NoAuth(self.trello)
