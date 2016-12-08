@@ -124,7 +124,13 @@ class Trelloha(object):
             return False
         bug_id = int(matched.group(1))
         bugzilla = self.get_bugzilla(bugzilla_url, bug_id)
-        bug_status = bugzilla.find('bug/bug_status').text
+        bug = bugzilla.find('bug')
+        if "error" in bug.attrib:
+            LOG.debug("Not allowed to view BZ%s: %s" %
+                      (bug_id, bug.attrib["error"]))
+            bug_status = None
+        else:
+            bug_status = bugzilla.find('bug/bug_status').text
 
         if bug_status in ["MODIFIED", "ON_QA", "VERIFIED", "RELEASING_PENDING",
                           "CLOSED"]:
