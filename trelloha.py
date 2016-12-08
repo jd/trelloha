@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 import json
 import logging
 import netrc
@@ -145,6 +146,9 @@ class Trelloha(object):
                                                     filter="visible",
                                                     checklists="all"):
                 for checklist in card["checklists"]:
+                    LOG.debug("Checking checklist '%s(%s)' of '%s(%s)'"
+                              % (checklist["name"], checklist["id"],
+                                 card["name"], card["id"]))
                     for item in checklist['checkItems']:
                         completed = (
                             item['state'] == "incomplete" and
@@ -165,6 +169,13 @@ class Trelloha(object):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose', '-v', action='store_true')
+    args = parser.parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+        logging.getLogger("requests").setLevel(logging.WARN)
+
     t = Trelloha()
     t.update_trello_card_checklist_with_review()
 
