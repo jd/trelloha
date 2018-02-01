@@ -88,6 +88,7 @@ class Trelloha(object):
         pr_id = int(matched.group(3))
         r = requests.get("https://api.github.com/repos/%s/%ss/%s" %
                          (repo, kind, pr_id))
+        r.raise_for_status()
         info = json.loads(r.text)
         if info['state'] in ['closed', 'merged']:
             LOG.info("Github %s %s %s is %s" %
