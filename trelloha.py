@@ -74,7 +74,10 @@ class Trelloha(object):
         r = requests.get("%s/show_bug.cgi?ctype=xml&id=%s" % (bugzilla_url,
                                                               bug_id),
                          verify=self.get_verify(bugzilla_url))
-        return defusedxml.ElementTree.fromstring(r.content)
+        try:
+            return defusedxml.ElementTree.fromstring(r.content)
+        except defusedxml.ElementTree.ParseError:
+            LOG.info("Fail to parse BZ%s", bug_id)
 
     def is_a_github_pull_request_merged(self, checklist_item):
         if self.GITHUB_URL not in checklist_item['name']:
@@ -126,6 +129,8 @@ class Trelloha(object):
             return False
         bug_id = int(matched.group(1))
         bugzilla = self.get_bugzilla(bugzilla_url, bug_id)
+        if not bugzilla:
+            return False
         bug = bugzilla.find('bug')
         if "error" in bug.attrib:
             LOG.debug("Not allowed to view BZ%s: %s" %
